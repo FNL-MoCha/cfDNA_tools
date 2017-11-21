@@ -13,10 +13,10 @@ use Parallel::ForkManager;
 use Data::Dump;
 use Term::ANSIColor;
 
-use constant DEBUG => 1;
+use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v0.2.112117";
+my $version = "v0.3.112117";
 
 # Remove when in prod.
 print "\n";
@@ -31,14 +31,14 @@ EOT
 
 my $copy_amp = 0;
 my $copy_loss = 0;
-my $fold_amp = 0;
-my $fold_loss = 0;
+my $fold_amp = 1.15;
+my $fold_loss = 0.85;
 
 my $outfile;
 my $novel;
 my $geneid;
 my $tiles;
-my $nocall;
+my $nocall = 1;
 my $format = 'pp';
 my $raw_output;
 
@@ -53,7 +53,7 @@ USAGE: $scriptname [options] <VCF_file(s)>
                   (DEFAULT: $fold_loss).
     -g, --gene    Print out results for this gene (or comma separated list of 
                   genes) only.
-    -N, --NOCALL  Do not output NOCALL results (Default: OFF)
+    -N, --NOCALL  Do not output NOCALL results (Default: On)
 
     Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
@@ -286,7 +286,7 @@ sub raw_output {
     select $out_fh;
     print join(',', qw(Sample Gender MAPD Cellularity), @$header), "\n";
 
-    for my $sample (keys %$data) {
+    for my $sample (sort { versioncmp($a, $b) } keys %$data) {
         my @elems = split(/:/, $sample);
         for my $cnv (@{$$data{$sample}}) {
             print join(',', @elems, @$cnv), "\n";
@@ -372,7 +372,8 @@ sub proc_vcf {
         next unless $data[4] eq '<CNV>';
         $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
 
-        # Let's handle NOCALLs for MATCHBox compatibility (prefer to filter on my own though).
+        # Get rid of NOCALLs, unless we specifically want them.
+        # TODO: somehow NOCALLs still escaping through.  Did I forget to set a default val?
         if ($nocall && $data[6] eq 'NOCALL') {
             ${$cnv_data{$sample_id}->{'NONE'}} = '';
             next;
