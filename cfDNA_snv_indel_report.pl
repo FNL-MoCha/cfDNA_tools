@@ -208,17 +208,10 @@ for my $input_file (@vcfs) {
 }
 $pm->wait_all_children;
 
-dd \%snv_data;
-__exit__(__LINE__,'Post read VCF file.');
+#dd \%snv_data;
+#__exit__(__LINE__,'Post read VCF file.');
 
-=cut
-my $results = proc_cnv_data(\%cnv_data, \%filters);
-#dd $results;
-#__exit__(__LINE__,'Post result processing.');
-
-print_results($results, $delimiter);
-
-=cut
+print_results(\%snv_data, $delimiter);
 
 sub __gen_sampleid {
     my $vcf = shift;
@@ -276,65 +269,28 @@ sub proc_vcf {
     return \%results, \$sample_id;
 }
 
-=cut
-sub proc_cnv_data {
-    my ($cnv_data, $filters) = @_;
-    my %results;
-
-    for my $sample ( keys %$cnv_data ) {
-        $results{$sample} = [];
-        my @outfields = qw( END LEN NUMTILES CN FD HS FUNC PVAL RMMDP MMDP );
-
-        for my $cnv ( sort { versioncmp ( $a, $b ) } keys %{$$cnv_data{$sample}} ) {
-            my %mapped_cnv_data;
-            last if $cnv eq 'NONE';
-
-            my ($chr, $start, $gene, undef) = split( /:/, $cnv );
-            %mapped_cnv_data = map{ $_ => $cnv_data{$sample}->{$cnv}->{$_} } @outfields;
-            @mapped_cnv_data{qw(chr start gene undef)} = split(/:/, $cnv);
-            $mapped_cnv_data{HS} //= 'No';
-
-            # Get OVAT Annot Data
-            # XXX: Remove this for now since there is no OVAT annotation at the moment.  Will bring back 
-            # if they do re-implement this.
-            #my ($gene_class, $variant_class);
-            #my $func = $mapped_cnv_data{FUNC};
-            #if ( $func && $func =~ /oncomine/ ) {
-                #my $json_annot = JSON->new->allow_singlequote->decode($func);
-                #my $parsed_annot = $$json_annot[0];
-                #$gene_class = $$parsed_annot{'oncomineGeneClass'};
-                #$variant_class = $$parsed_annot{'oncomineVariantClass'};
-            #} else {
-                #$gene_class = $variant_class = '---';
-            #}
-            #$mapped_cnv_data{GC} = $gene_class;
-            #$mapped_cnv_data{VC} = $variant_class;
-
-            my @filtered_data = filter_results(\%mapped_cnv_data, $filters);
-            push(@{$results{$sample}}, \@filtered_data) if @filtered_data;
-        }
-    }
-    return \%results;
-}
-
 sub print_results {
     my ($data, $delimiter) = @_;
-    my @header = qw( Chr Gene Start End Length Tiles CN FD p-val Med_Mol_Cov 
-        Med_Read_Cov );
-    #my $pp_format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s %-18s\n";
-
+    my ($ref_width, $alt_width, $cds_width, $aa_width) = get_col_widths($data, [1,2,11,12]);
+    my @header = qw( Chr:Position Ref Alt VAF LOD AmpCov MolRefCov MolAltCov VarID 
+        Gene Transcript CDS AA Location Function );
+       
     my %formatter = (
-        'Chr'          => '%-8s',
-        'Gene'         => '%-8s',
-        'Start'        => '%-11s', 
-        'End'          => '%-11s',
-        'Length'       => '%-11s',
-        'Tiles'        => '%-8s',
-        'CN'           => '%-8s',
-        'FD'           => '%-8s',
-        'p-val'        => '%-8s',
-        'Med_Mol_Cov'  => '%-14s',
-        'Med_Read_Cov' => '%-14s',
+        'Chr:Position' => '%-17s',
+        'Ref'          => "%-${ref_width}s", # have to get longest here.
+        'Alt'          => "%-${alt_width}s", # have to get longest here.
+        'VAF'          => '%-9s',
+        'LOD'          => '%-7s',
+        'AmpCov'       => '%-8s',
+        'MolRefCov'    => '%-8s',
+        'MolAltCov'    => '%-8s',
+        'VarID'        => '%-12s',
+        'Gene'         => '%-14s',
+        'Transcript'   => '%-15s',
+        'CDS'          => "%-${cds_width}s", # have to get longest here.
+        'AA'           => "%-${aa_width}s", # have to get longest here.
+        'Location'     => '%-12s',
+        'Function'     => '%-22s',
     );
 
     select $out_fh;
@@ -345,14 +301,13 @@ sub print_results {
         raw_output($data, \@header);
     } else {
         for my $sample (keys %$data) {
-            my ($id, $gender, $mapd, $cellularity) = split( /:/, $sample );
-            print "::: CNV Data For $id (Gender: $gender, Cellularity: $cellularity, MAPD: $mapd) :::\n";
             ($delimiter) ? print join($delimiter, @header),"\n" : printf $string_format, @header;
             if ( ! @{$$data{$sample}} ) {
-                print ">>>>  No Reportable CNVs Found in Sample  <<<<\n"; 
+                # TODO: may replace with '-' char
+                print ">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n"; 
             } else {
-                for my $cnv (@{$$data{$sample}}) {
-                    ($delimiter) ? print join($delimiter, @$cnv), "\n" : printf $string_format, @$cnv;
+                for my $var (@{$$data{$sample}}) {
+                    ($delimiter) ? print join($delimiter, @$var), "\n" : printf $string_format, @$var;
                 }
             }
             print "\n";
@@ -376,53 +331,39 @@ sub raw_output {
     }
 }
 
-sub filter_results {
-    # Filter out CNV data prior to printing it all out. Each call receives
-    # a hash of data, and either None returned or a hash of specific fields
-    # as defined in "return_data()"
-    my ($data, $filters) = @_;
-    my @cn_thresholds = @$filters{qw(copy_amp copy_loss fold_amp fold_loss)};
+sub get_col_widths {
+    # Load in a hash of data and an array of indices for which we want field width info, and
+    # output an array of field widths to use in the format string.
+    my ($data,$indices) = @_;
+    #
+    # XXX
+    dd $data;
 
-    # Gene level filter
-    return if (@{$filters{gene}}) and ! grep {$$data{gene} eq $_} @{$filters{gene}};
-
-    # We made it the whole way through; check for copy number thresholds
-    (copy_number_filter($data, \@cn_thresholds)) ? return return_data($data) : return;
-}
-
-sub return_data {
-    my $data = shift;
-    my @fields = qw(chr gene start END LEN NUMTILES CN FD PVAL RMMDP MMDP);
-    return @$data{@fields};
-}
-
-sub copy_number_filter {
-    # Filter data based on either Fold Diff value or Copy Number value.
-    my ($data, $threshold) = @_;
-    my ($ca, $cl, $fa, $fl) = @$threshold;
-
-    # XXX: Copy data is dependent on p-val. For now, let's just filter out anything
-    # with a p-val > 10e-5 per TF QC doc.  Can tailor this a bit later.
-    return 0 if $$data{'PVAL'} > 0.00005;
-
-    # If we're using fold diff values, return 1 if FD > amp threshold or less 
-    # than loss threshold.
-    if ($fa and $fl) {
-        return 1 if ($$data{'FD'} > $fa || $$data{'FD'} < $fl);
-    }
-    elsif ($ca and $cl) {
-        return 1 if ($$data{'CN'} > $ca || $$data{'CN'} < $cl);
-    }
-    else {
-        # Return everything if there are no filters.
-        return 1;
+    my @return_widths;
+    for my $sample (keys %$data) {
+        if ($data->{$sample}) {
+            print "have data\n";
+            #for my $pos (@$indices) {
+                #my @elems = map { ${$$data{$_}}[$pos] } keys %$data;
+                #push(@return_widths, get_longest(\@elems)+2);
+            #}
+        } 
+        else {
+            print "dont have data\n";
+        }
     }
 
-    # If we got here, the data does not meet threshold requirements and will be
-    # filtered out.
-    return 0;
+    return @return_widths;
 }
-=cut
+
+sub get_longest {
+    my $array = shift;
+    my @lens = map { length($_) } @$array;
+    my @sorted_lens = sort { versioncmp($b, $a) } @lens;
+    return $sorted_lens[0];
+}
+
+
 sub __exit__ {
     my ($line, $msg) = @_;
     print "\n\n";
