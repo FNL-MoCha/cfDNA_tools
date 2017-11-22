@@ -19,7 +19,7 @@ use Term::ANSIColor;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v0.1.112117";
+my $version = "v0.2.112117";
 
 # Remove when in prod.
 print "\n";
@@ -161,9 +161,6 @@ else {
     }
 }
 
-# XXX: Pick it up from here!
-
-=cut
 # Write output to either indicated file or STDOUT
 my $out_fh;
 if ( $outfile ) {
@@ -175,16 +172,25 @@ if ( $outfile ) {
 }
 
 #########----------------------- END ARG Parsing ---------------------#########
-my %cnv_data;
-my $pm = new Parallel::ForkManager(48);
+my %snv_data;
 
+# XXX
+#my %tmp_data;
+#for my $vcf (@vcfs) {
+    #my ($tmp_results, $id) = proc_vcf(\$vcf);
+    #$tmp_data{$$id} = $tmp_results;
+#}
+#dd \%tmp_data;
+#__exit__(__LINE__,'Stopping prior to running parallel process version');
+
+my $pm = new Parallel::ForkManager(48);
 $pm->run_on_finish(
     sub {
         my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data_structure_reference) = @_;
         my $vcf = $data_structure_reference->{input};
         my $name = $data_structure_reference->{id};
         $name //= basename($vcf);
-        $cnv_data{$$name} = $data_structure_reference->{result};
+        $snv_data{$$name} = $data_structure_reference->{result};
     }
 );
 
@@ -202,15 +208,75 @@ for my $input_file (@vcfs) {
 }
 $pm->wait_all_children;
 
-#dd \%cnv_data;
-#__exit__(__LINE__,'Post read VCF file.');
+dd \%snv_data;
+__exit__(__LINE__,'Post read VCF file.');
 
+=cut
 my $results = proc_cnv_data(\%cnv_data, \%filters);
 #dd $results;
 #__exit__(__LINE__,'Post result processing.');
 
 print_results($results, $delimiter);
 
+=cut
+
+sub __gen_sampleid {
+    my $vcf = shift;
+    my ($sample, $timestamp);
+    open(my $fh, "<", $$vcf);
+    while (<$fh>) {
+        if (/^##fileUTCtime=(.*?)$/) {
+            $timestamp = $1;
+        }
+        elsif (/^#CHROM/) {
+            my @elems = split;
+            $sample = $elems[-1];
+        }
+    }
+    close $fh;
+    return "$sample|$timestamp";
+}
+
+sub __filter_raw_data {
+    # Use the most basic cfDNA pipeline filtering (like LOD%, AltCov, etc.) to 
+    # prune data a bit.
+    my $data_string = shift;
+    my $alt_mol_cov_threshold = 1;
+    my $vaf_threshold = 0.1;
+    my @data = split;
+    
+    # First check VAF and coveraage
+    if (($data[3] > $data[4]) and ($data[7] > $alt_mol_cov_threshold)) {
+        # If that passes, get rid of de novo calls until we figure out rule for 
+        # those
+        if ($data[8] ne '.') {
+            return \@data;
+        }
+    }
+}
+
+sub proc_vcf {
+    # TODO: Add additional options to VCF Extractor call in order to do some 
+    # pre-filtering, like filter by gene, position, etc.
+    my $vcf = shift;
+    my %results;
+
+    my $sample_id = __gen_sampleid($vcf);
+
+    my $cmd = "vcfExtractor.pl -Nnac $$vcf";
+    open(my $stream, "-|", $cmd);
+    while (<$stream>) {
+        next unless /^chr/;
+        my $filtered_data = __filter_raw_data($_);
+        if ($filtered_data) {
+            my $varid = join( ':', @$filtered_data[0..2] );
+            $results{$varid} = $filtered_data;
+        }
+    }
+    return \%results, \$sample_id;
+}
+
+=cut
 sub proc_cnv_data {
     my ($cnv_data, $filters) = @_;
     my %results;
@@ -356,68 +422,7 @@ sub copy_number_filter {
     # filtered out.
     return 0;
 }
-
-sub proc_vcf {
-    my $vcf = shift;
-    my ($sample_id, $gender, $mapd, $cellularity, $sample_name);
-    my %results;
-
-    open( my $vcf_fh, "<", $$vcf);
-    while (<$vcf_fh>) {
-        if ( /^##/ ) {
-            if ( $_ =~ /sampleGender=(\w+)/ ) {
-                $gender = $1 and next;
-            }
-            # Need to add to accomodate the new CNV plugin; may not have the same field as the normal IR data.
-            if ($_ =~ /AssumedGender=([mf])/) {
-                ($1 eq 'm') ? ($gender='Male') : ($gender='Female');
-                next;
-            }
-            elsif ( $_ =~ /mapd=(\d\.\d+)/ ) {
-                $mapd = $1 and next;
-            }
-            elsif ( $_ =~ /CellularityAsAFractionBetween0-1=(.*)$/ ) {
-                $cellularity = $1 and next;
-            }
-        } 
-
-        my @data = split;
-        if ( $data[0] =~ /^#/ ) {
-            $sample_name = $data[-1] and next;
-        }
-        next unless $data[4] eq '<CNV>';
-        $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
-
-        # Get rid of NOCALLs, unless we specifically want them.
-        # TODO: somehow NOCALLs still escaping through.  Did I forget to set a default val?
-        if ($nocall && $data[6] eq 'NOCALL') {
-            ${$cnv_data{$sample_id}->{'NONE'}} = '';
-            next;
-        }
-
-        my $varid = join( ':', @data[0..3] );
-        
-        # Kludgy, but need to deal with hotspots (HS) field; not like others!
-        $data[7] =~ s/HS/HS=Yes/;
-        $data[7] =~ s/SD;/SD=NA;/; # sometimes data in this field and sometimes not.  
-
-        my @format = split( /;/, $data[7] );
-        my ($cn) = $data[9] =~ /:([^:]+)$/;
-        push( @format, "CN=$cn" );
-
-        %{$results{$varid}} = map { split /=/ } @format;
-    }
-    if (DEBUG) {
-        print "="x35, "  DEBUG  ", "="x35, "\n";
-        print "\tSample Name:  $sample_name\n";
-        print "\tCellularity:  $cellularity\n";
-        print "\tGender:       $gender\n";
-        print "\tMAPD:         $mapd\n";
-        print "="x79, "\n";
-    }
-    return \%results, \$sample_id;
-}
-
+=cut
 sub __exit__ {
     my ($line, $msg) = @_;
     print "\n\n";
