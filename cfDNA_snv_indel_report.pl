@@ -19,7 +19,7 @@ use Term::ANSIColor;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v0.2.112117";
+my $version = "v0.3.112717";
 
 # Remove when in prod.
 print "\n";
@@ -282,8 +282,8 @@ sub print_results {
         'VAF'          => '%-9s',
         'LOD'          => '%-7s',
         'AmpCov'       => '%-8s',
-        'MolRefCov'    => '%-8s',
-        'MolAltCov'    => '%-8s',
+        'MolRefCov'    => '%-11s',
+        'MolAltCov'    => '%-11s',
         'VarID'        => '%-12s',
         'Gene'         => '%-14s',
         'Transcript'   => '%-15s',
@@ -302,12 +302,13 @@ sub print_results {
     } else {
         for my $sample (keys %$data) {
             ($delimiter) ? print join($delimiter, @header),"\n" : printf $string_format, @header;
-            if ( ! @{$$data{$sample}} ) {
-                # TODO: may replace with '-' char
+            if ( ! $data->{$sample} ) {
                 print ">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n"; 
             } else {
-                for my $var (@{$$data{$sample}}) {
-                    ($delimiter) ? print join($delimiter, @$var), "\n" : printf $string_format, @$var;
+                for my $var (sort { versioncmp($a, $b) } keys $data->{$sample}) {
+                    ($delimiter) 
+                        ? print join($delimiter, @{$data->{$sample}{$var}}), "\n" 
+                        : printf $string_format, @{$data->{$sample}{$var}};
                 }
             }
             print "\n";
@@ -321,12 +322,12 @@ sub raw_output {
     my ($data, $header) = @_;
 
     select $out_fh;
-    print join(',', qw(Sample Gender MAPD Cellularity), @$header), "\n";
+    print join(',', 'Sample', @$header), "\n";
 
     for my $sample (sort { versioncmp($a, $b) } keys %$data) {
-        my @elems = split(/:/, $sample);
-        for my $cnv (@{$$data{$sample}}) {
-            print join(',', @elems, @$cnv), "\n";
+        my $sample_name = (split(/\|/, $sample))[0];
+        for my $var (sort { versioncmp($a, $b) } keys $data->{$sample}) {
+            print join(',', $sample_name, @{$data->{$sample}{$var}}), "\n";
         }
     }
 }
@@ -335,24 +336,22 @@ sub get_col_widths {
     # Load in a hash of data and an array of indices for which we want field width info, and
     # output an array of field widths to use in the format string.
     my ($data,$indices) = @_;
-    #
-    # XXX
-    dd $data;
-
     my @return_widths;
-    for my $sample (keys %$data) {
-        if ($data->{$sample}) {
-            print "have data\n";
-            #for my $pos (@$indices) {
-                #my @elems = map { ${$$data{$_}}[$pos] } keys %$data;
-                #push(@return_widths, get_longest(\@elems)+2);
-            #}
-        } 
-        else {
-            print "dont have data\n";
+
+    for my $pos (@$indices) {
+        my $holder = 0;
+        # look through each requested index...
+        for my $sample (keys %$data) {
+            # Then through each sample.
+            if ($data->{$sample}) {
+                my @elems = map { $data->{$sample}{$_}[$pos] } keys $data->{$sample};
+                my $longest = get_longest(\@elems)+2;
+                $holder = $longest if $longest > $holder;
+            } 
+
+            push(@return_widths, $holder);
         }
     }
-
     return @return_widths;
 }
 
