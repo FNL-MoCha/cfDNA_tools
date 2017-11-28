@@ -19,7 +19,7 @@ use Term::ANSIColor;
 use constant DEBUG => 1;
 
 my $scriptname = basename($0);
-my $version = "v0.4.112817";
+my $version = "v0.5.112817";
 
 # Remove when in prod.
 print "\n";
@@ -116,7 +116,9 @@ if (DEBUG) {
     while (my ($keys, $values) = each %filters) {
         $values //= 'undef';
         if ($keys eq 'gene') {
-            printf "\t%-7s => %s\n",$keys,join(',',@$values);
+            my $list = 'undef';
+            $list = join(',', @$values) if defined $filters{'gene'};
+            printf "\t%-7s => %s\n", $keys, $list;
         } else {
             printf "\t%-7s => %s\n",$keys,$values;
         }
