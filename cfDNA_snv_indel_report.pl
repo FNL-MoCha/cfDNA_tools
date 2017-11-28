@@ -95,6 +95,11 @@ sub print_version {
 help if $help;
 print_version if $ver_info;
 
+# Set up some colored output flags and warn / error variables
+my $warn  = colored( "WARN:", 'bold yellow on_black');
+my $err   = colored( "ERROR:", 'bold red on_black');
+my $info  = colored( "INFO:", 'bold cyan on_black');
+
 my @genelist = split(/,/, $geneid) if $geneid;
 
 #my %filters = (
@@ -134,26 +139,25 @@ die "ERROR: '$format' is not a valid option as a delimiter!\n" unless defined $f
 
 # Make sure enough args passed to script
 if ( scalar( @ARGV ) < 1 ) {
-    print "ERROR: No VCF files passed to script!\n\n"; 
+    print "$err No VCF files passed to script!\n\n"; 
     print "$usage\n";
     exit 1;
 }
 my @vcfs = @ARGV;
 
-# Check for required vcfExtractor to be in your path.
-# TODO: Colorize error msg.
+# Check for vcfExtractor to be in your path and be new enough to handle cfDNA data.
 if (! qx(which vcfExtractor.pl)) {
-    print "ERROR: vcfExtractor.pl is not in your path. Please install this required ",
+    print "$err 'vcfExtractor.pl' is not in your path. Please install this required ",
         "utility from https://github.com/drmrgd/biofx_utils and try again.\n";
     exit 1;
 } 
 else {
     my $required_ver = version->parse('7.9');
-    my ($vcfextractor_ver) = map{ /v(\d\.\d\.(?:\d_)?\d{6})/ } split(/\n/, qx(vcfExtractor.pl -v));
-    my ($ver, $subver, $date) = split(/\./, $vcfextractor_ver);
+    my ($vcfextractor_ver) = map{ /v(\d+\.\d+\.(?:\d+_)?\d{6})/ } split(/\n/, qx(vcfExtractor.pl -v));
+    my ($ver, $subver, $date) = split(/[\._]/, $vcfextractor_ver);
     my $cur_ver = version->parse("$ver.$subver");
 
-    if ($cur_ver <=> $required_ver) {
+    if ($cur_ver >= $required_ver) {
         print "ERROR: vcfExtractor.pl version (v$cur_ver) is too old and does not have ",
             "the necessary components to run cfDNA data analysis.\nPlease update your version to ",
             "the latest from https://github.com/drmrgd/biofx_utils.\n";
@@ -170,7 +174,6 @@ if ( $outfile ) {
 } else {
 	$out_fh = \*STDOUT;
 }
-
 #########----------------------- END ARG Parsing ---------------------#########
 my %snv_data;
 
@@ -361,7 +364,6 @@ sub get_longest {
     my @sorted_lens = sort { versioncmp($b, $a) } @lens;
     return $sorted_lens[0];
 }
-
 
 sub __exit__ {
     my ($line, $msg) = @_;
