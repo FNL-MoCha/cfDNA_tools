@@ -16,20 +16,24 @@ use Parallel::ForkManager;
 use Data::Dump;
 use Term::ANSIColor;
 
-use constant DEBUG => 0;
+use constant DEBUG => 1;
 
 my $scriptname = basename($0);
-my $version = "v0.3.112717";
+my $version = "v0.4.112817";
 
 # Remove when in prod.
 print "\n";
 print colored("*" x 75, 'bold yellow on_black'), "\n";
-print colored("      DEVELOPMENT VERSION OF $scriptname (version: $version)\n", 'bold yellow on_black');
+print colored("      DEVELOPMENT VERSION OF $scriptname (version: $version)\n", 
+    'bold yellow on_black');
 print colored("*" x 75, 'bold yellow on_black');
 print "\n\n";
 
 my $description = <<"EOT";
-<Description>
+Generate a report of SNVs and Indels reported from the cfDNA panel. Start with 
+output data from vcfExtractor.pl, and run cfDNA standard filters. Can also add
+additional filters to the output to just return data for a set of genes, or based
+on VAF, etc.
 EOT
 
 # TODO: Figure this out.
@@ -56,7 +60,7 @@ my $usage = <<"EOT";
 USAGE: $scriptname [options] <VCF_file(s)>
     Filter Options
     -g, --gene    Print out results for this gene (or comma separated list of 
-                  genes) only.
+                  genes) only. *** NOT YET IMPLEMENTED *** 
     -N, --NOCALL  Do not output NOCALL results (Default: On)
 
     Output Options
@@ -100,31 +104,25 @@ my $warn  = colored( "WARN:", 'bold yellow on_black');
 my $err   = colored( "ERROR:", 'bold red on_black');
 my $info  = colored( "INFO:", 'bold cyan on_black');
 
-my @genelist = split(/,/, $geneid) if $geneid;
+# Set up a hash of filters that we'll pass downstream
+my %filters = (
+    'gene'       => undef,
+);
+@{$filters{'gene'}} = split(/,/, $geneid) if $geneid;
 
-#my %filters = (
-    #'copy_amp'   => $copy_amp,
-    #'copy_loss'  => $copy_loss,
-    #'fold_amp'   => $fold_amp,
-    #'fold_loss'  => $fold_loss,
-    #'gene'       => [@genelist],
-    #'tiles'      => $tiles,
-    #'novel'      => $novel,
-#);
-
-#if (DEBUG) {
-    #print '='x35, '  DEBUG  ', '='x35, "\n";
-    #print "Filters being employed\n";
-    #while (my ($keys, $values) = each %filters) {
-        #$values //= 'undef';
-        #if ($keys eq 'gene') {
-            #printf "\t%-7s => %s\n",$keys,join(',',@$values);
-        #} else {
-            #printf "\t%-7s => %s\n",$keys,$values;
-        #}
-    #}
-    #print '='x79, "\n";
-#}
+if (DEBUG) {
+    print '='x35, '  DEBUG  ', '='x35, "\n";
+    print "Filters being employed\n";
+    while (my ($keys, $values) = each %filters) {
+        $values //= 'undef';
+        if ($keys eq 'gene') {
+            printf "\t%-7s => %s\n",$keys,join(',',@$values);
+        } else {
+            printf "\t%-7s => %s\n",$keys,$values;
+        }
+    }
+    print '='x79, "\n";
+}
 
 my %formats = (
     'csv'   => ',',
@@ -177,15 +175,6 @@ if ( $outfile ) {
 #########----------------------- END ARG Parsing ---------------------#########
 my %snv_data;
 
-# XXX
-#my %tmp_data;
-#for my $vcf (@vcfs) {
-    #my ($tmp_results, $id) = proc_vcf(\$vcf);
-    #$tmp_data{$$id} = $tmp_results;
-#}
-#dd \%tmp_data;
-#__exit__(__LINE__,'Stopping prior to running parallel process version');
-
 my $pm = new Parallel::ForkManager(48);
 $pm->run_on_finish(
     sub {
@@ -199,7 +188,7 @@ $pm->run_on_finish(
 
 for my $input_file (@vcfs) {
     $pm->start and next;
-    my ($return_data, $sample_id)  = proc_vcf(\$input_file);
+    my ($return_data, $sample_id)  = proc_vcf(\$input_file, \%filters);
 
     $pm->finish(0, 
         { 
@@ -210,9 +199,6 @@ for my $input_file (@vcfs) {
      );
 }
 $pm->wait_all_children;
-
-#dd \%snv_data;
-#__exit__(__LINE__,'Post read VCF file.');
 
 print_results(\%snv_data, $delimiter);
 
@@ -254,13 +240,17 @@ sub __filter_raw_data {
 sub proc_vcf {
     # TODO: Add additional options to VCF Extractor call in order to do some 
     # pre-filtering, like filter by gene, position, etc.
-    my $vcf = shift;
+    my ($vcf,$filters) = @_;
     my %results;
 
     my $sample_id = __gen_sampleid($vcf);
 
-    my $cmd = "vcfExtractor.pl -Nnac $$vcf";
-    open(my $stream, "-|", $cmd);
+    my $cmd = "vcfExtractor.pl -Nnac";
+    if ($filters->{'gene'}) {
+        $cmd .= " -g " . join(',', @{$filters{'gene'}});
+    }
+
+    open(my $stream, "-|", "$cmd $$vcf");
     while (<$stream>) {
         next unless /^chr/;
         my $filtered_data = __filter_raw_data($_);
