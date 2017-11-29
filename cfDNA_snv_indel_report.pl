@@ -266,7 +266,7 @@ sub proc_vcf {
 
 sub print_results {
     my ($data, $delimiter) = @_;
-    my ($ref_width, $alt_width, $cds_width, $aa_width) = get_col_widths($data, [1,2,11,12]);
+    my ($ref_width, $alt_width, $varid_width, $cds_width, $aa_width) = get_col_widths($data, [1,2,8,11,12]);
     my @header = qw( Chr:Position Ref Alt VAF LOD AmpCov MolRefCov MolAltCov VarID 
         Gene Transcript CDS AA Location Function );
        
@@ -279,13 +279,13 @@ sub print_results {
         'AmpCov'       => '%-8s',
         'MolRefCov'    => '%-11s',
         'MolAltCov'    => '%-11s',
-        'VarID'        => '%-12s',
-        'Gene'         => '%-14s',
+        'VarID'        => "%-${varid_width}s",
+        'Gene'         => '%-10s',
         'Transcript'   => '%-15s',
         'CDS'          => "%-${cds_width}s", # have to get longest here.
         'AA'           => "%-${aa_width}s", # have to get longest here.
         'Location'     => '%-12s',
-        'Function'     => '%-22s',
+        'Function'     => '%-9s',
     );
 
     select $out_fh;
@@ -297,7 +297,7 @@ sub print_results {
     } else {
         for my $sample (keys %$data) {
             ($delimiter) ? print join($delimiter, @header),"\n" : printf $string_format, @header;
-            if ( ! $data->{$sample} ) {
+            if ( ! %{$data->{$sample}} ) {
                 print ">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n"; 
             } else {
                 for my $var (sort { versioncmp($a, $b) } keys $data->{$sample}) {
@@ -334,19 +334,19 @@ sub get_col_widths {
     my @return_widths;
 
     for my $pos (@$indices) {
-        my $holder = 0;
+        my $holder = 4; # min width has to be 8
         # look through each requested index...
         for my $sample (keys %$data) {
             # Then through each sample.
-            if ($data->{$sample}) {
+            if (%{$data->{$sample}}) {
                 my @elems = map { $data->{$sample}{$_}[$pos] } keys $data->{$sample};
                 my $longest = get_longest(\@elems)+2;
                 $holder = $longest if $longest > $holder;
-            } 
-
+            }
             push(@return_widths, $holder);
         }
     }
+    dd \@return_widths;
     return @return_widths;
 }
 
