@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 # Get CNV data from cfDNA panel VCF file
+# TODO: fix cfDNA p-val bug
 #################################################################################################
 use warnings;
 use strict;

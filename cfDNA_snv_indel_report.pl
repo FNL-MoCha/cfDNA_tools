@@ -19,14 +19,14 @@ use Term::ANSIColor;
 use constant DEBUG => 1;
 
 my $scriptname = basename($0);
-my $version = "v0.5.112817";
+my $version = "v0.6.112817";
 
 # Remove when in prod.
 print "\n";
-print colored("*" x 75, 'bold yellow on_black'), "\n";
+print colored("*" x 80, 'bold yellow on_black'), "\n";
 print colored("      DEVELOPMENT VERSION OF $scriptname (version: $version)\n", 
     'bold yellow on_black');
-print colored("*" x 75, 'bold yellow on_black');
+print colored("*" x 80, 'bold yellow on_black');
 print "\n\n";
 
 my $description = <<"EOT";
@@ -202,6 +202,9 @@ for my $input_file (@vcfs) {
 }
 $pm->wait_all_children;
 
+#dd \%snv_data;
+#__exit__(__LINE__,'');
+
 print_results(\%snv_data, $delimiter);
 
 sub __gen_sampleid {
@@ -227,14 +230,23 @@ sub __filter_raw_data {
     my $data_string = shift;
     my $alt_mol_cov_threshold = 1;
     my $vaf_threshold = 0.1;
-    my @data = split;
+    
+    #my @data = split;
+    #print $data_string;
+    #my @foo = split(' ', $data_string);
+    #dd \@foo;
+    #return; 
+
+    my ($pos, $ref, $alt, $vaf, $lod, $amp_cov, $ref_cov, $alt_cov, $varid, 
+        $gene, $tscript, $cds, $aa, $location, $function) = split(' ', $data_string);
     
     # First check VAF and coveraage
-    if (($data[3] > $data[4]) and ($data[7] > $alt_mol_cov_threshold)) {
+    #if (($data[3] > $data[4]) and ($data[7] > $alt_mol_cov_threshold)) {
+    if (($vaf > $lod ) and ($alt_cov > $alt_mol_cov_threshold)) {
         # If that passes, get rid of de novo calls until we figure out rule for 
         # those
-        if ($data[8] ne '.') {
-            return \@data;
+        if ($varid ne '.') {
+            return [split(' ', $data_string)];
         }
     }
 }
@@ -255,6 +267,13 @@ sub proc_vcf {
     open(my $stream, "-|", "$cmd $$vcf");
     while (<$stream>) {
         next unless /^chr/;
+
+        # XXX
+        #next unless /^chr11:534288/;
+        #
+        # TODO: Need to figure out how to only indicate calls that are the positive call when
+        # multiple alleles per entry.
+
         my $filtered_data = __filter_raw_data($_);
         if ($filtered_data) {
             my $varid = join( ':', @$filtered_data[0..2] );
@@ -346,7 +365,6 @@ sub get_col_widths {
             push(@return_widths, $holder);
         }
     }
-    dd \@return_widths;
     return @return_widths;
 }
 
