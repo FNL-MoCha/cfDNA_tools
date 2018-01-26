@@ -8,10 +8,19 @@ use File::Basename;
 use Parallel::ForkManager;
 use Data::Dump;
 use Sort::Versions;
+use Term::ANSIColor;
 
 use constant DEBUG => 0;
 
-my $version = "v0.3.121817";
+my $scriptname = basename($0);
+my $version = "v0.4.121817";
+
+# Remove when in prod.
+print "\n";
+print colored("*" x 75, 'bold yellow on_black'), "\n";
+print colored("      DEVELOPMENT VERSION OF $scriptname (version: $version)\n", 'bold yellow on_black');
+print colored("*" x 75, 'bold yellow on_black');
+print "\n\n";
 
 my $gene;
 my $threshold = 2;
@@ -24,7 +33,7 @@ my $help;
 my $ver_info;
 my $outfile;
 
-my $scriptname = basename($0);
+
 my $description = <<"EOT";
 Print out results of cfDNA fusion pipeline.  
 EOT
@@ -155,7 +164,7 @@ for my $sample ( sort keys %results ) {
             }
 
             my ($fusion, $junct, $id ) = split(/\|/, $entry);
-            next if $$fusion_results{$entry}->{'COUNT'} < $threshold;
+            
 
             print_data(\$sample, "$fusion.$junct", \$id, $$fusion_results{$entry}, 
                 \$format);
@@ -201,6 +210,7 @@ sub proc_vcf {
             # just rely on counts anyway?). Will do threshold filtering at print
             # step
             next if ($count == 0 or $data[6] eq 'FAIL') and ! $ref_calls;
+            next if ($count < $threshold) and ! $ref_calls;
 
             # Get rid of FAIL and NOCALL calls to be more compatible with MATCHBox output.
             next if $data[6] eq 'NOCALL' and ! $nocall;
