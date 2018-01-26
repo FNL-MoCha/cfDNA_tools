@@ -16,10 +16,10 @@ use Parallel::ForkManager;
 use Data::Dump;
 use Term::ANSIColor;
 
-use constant DEBUG => 1;
+use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v0.6.112817";
+my $version = "v0.7.012618";
 
 # Remove when in prod.
 print "\n";
@@ -35,16 +35,6 @@ output data from vcfExtractor.pl, and run cfDNA standard filters. Can also add
 additional filters to the output to just return data for a set of genes, or based
 on VAF, etc.
 EOT
-
-# TODO: Figure this out.
-# new filters need to be:
-#     molecular coverage (families) > 2 (Can use AltCov data for this).
-#     VAF > LOD%
-#     some novel variants (TSGs?) can be called when VAF > 0.5%?
-#my $copy_amp = 0;
-#my $copy_loss = 0;
-#my $fold_amp = 1.15;
-#my $fold_loss = 0.85;
 
 my $outfile;
 my $geneid;
@@ -231,17 +221,10 @@ sub __filter_raw_data {
     my $alt_mol_cov_threshold = 1;
     my $vaf_threshold = 0.1;
     
-    #my @data = split;
-    #print $data_string;
-    #my @foo = split(' ', $data_string);
-    #dd \@foo;
-    #return; 
-
     my ($pos, $ref, $alt, $vaf, $lod, $amp_cov, $ref_cov, $alt_cov, $varid, 
         $gene, $tscript, $cds, $aa, $location, $function) = split(' ', $data_string);
     
     # First check VAF and coveraage
-    #if (($data[3] > $data[4]) and ($data[7] > $alt_mol_cov_threshold)) {
     if (($vaf > $lod ) and ($alt_cov > $alt_mol_cov_threshold)) {
         # If that passes, get rid of de novo calls until we figure out rule for 
         # those
@@ -287,24 +270,26 @@ sub print_results {
     my ($data, $delimiter) = @_;
     my ($ref_width, $alt_width, $varid_width, $cds_width, $aa_width) = get_col_widths($data, [1,2,8,11,12]);
     my @header = qw( Chr:Position Ref Alt VAF LOD AmpCov MolRefCov MolAltCov VarID 
-        Gene Transcript CDS AA Location Function );
+        Gene Transcript CDS AA Location Function oncomineGeneClass oncomineVariantClass);
        
     my %formatter = (
-        'Chr:Position' => '%-17s',
-        'Ref'          => "%-${ref_width}s", # have to get longest here.
-        'Alt'          => "%-${alt_width}s", # have to get longest here.
-        'VAF'          => '%-9s',
-        'LOD'          => '%-7s',
-        'AmpCov'       => '%-8s',
-        'MolRefCov'    => '%-11s',
-        'MolAltCov'    => '%-11s',
-        'VarID'        => "%-${varid_width}s",
-        'Gene'         => '%-10s',
-        'Transcript'   => '%-15s',
-        'CDS'          => "%-${cds_width}s", # have to get longest here.
-        'AA'           => "%-${aa_width}s", # have to get longest here.
-        'Location'     => '%-12s',
-        'Function'     => '%-9s',
+        'Chr:Position'         => '%-17s',
+        'Ref'                  => "%-${ref_width}s", # have to get longest here.
+        'Alt'                  => "%-${alt_width}s", # have to get longest here.
+        'VAF'                  => '%-9s',
+        'LOD'                  => '%-7s',
+        'AmpCov'               => '%-8s',
+        'MolRefCov'            => '%-11s',
+        'MolAltCov'            => '%-11s',
+        'VarID'                => "%-${varid_width}s",
+        'Gene'                 => '%-10s',
+        'Transcript'           => '%-15s',
+        'CDS'                  => "%-${cds_width}s", # have to get longest here.
+        'AA'                   => "%-${aa_width}s", # have to get longest here.
+        'Location'             => '%-12s',
+        'Function'             => '%-9s',
+        'oncomineGeneClass'    => '%-21s',
+        'oncomineVariantClass' => '%s',
     );
 
     select $out_fh;
