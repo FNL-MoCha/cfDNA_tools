@@ -55,10 +55,10 @@ USAGE: $scriptname [options] <VCF_file(s)>
 
     Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
-    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or pretty 
-                      print (as 'pp') (DEFAULT: $format).
-    -r, --raw         Output as a raw CSV format that can be input into Excel. The 
-                      header output is not in columns as a part of the whole.
+    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or 
+                      pretty print (as 'pp') (DEFAULT: $format).
+    -r, --raw         Output as a raw CSV format that can be input into Excel.
+                      The header output is not in columns as a part of the whole.
     -v, --version     Print version information
     -h, --help        Print this help information
 EOT
@@ -137,8 +137,9 @@ my @vcfs = @ARGV;
 
 # Check for vcfExtractor to be in your path and be new enough to handle cfDNA data.
 if (! qx(which vcfExtractor.pl)) {
-    print "$err 'vcfExtractor.pl' is not in your path. Please install this required ",
-        "utility from https://github.com/drmrgd/biofx_utils and try again.\n";
+    print "$err 'vcfExtractor.pl' is not in your path. Please install this ",
+        "required utility from https://github.com/drmrgd/biofx_utils and try ",
+        "again.\n";
     exit 1;
 } 
 else {
@@ -148,9 +149,10 @@ else {
     my $cur_ver = version->parse("$ver.$subver");
 
     if ($cur_ver >= $required_ver) {
-        print "ERROR: vcfExtractor.pl version (v$cur_ver) is too old and does not have ",
-            "the necessary components to run cfDNA data analysis.\nPlease update your version to ",
-            "the latest from https://github.com/drmrgd/biofx_utils.\n";
+        print "ERROR: vcfExtractor.pl version (v$cur_ver) is too old and does not ",
+            "have the necessary components to run cfDNA data analysis.\nPlease ",
+            "update your version to the latest from: ",
+            "\n\thttps://github.com/drmrgd/biofx_utils.\n";
         exit 1;
     }
 }
@@ -170,7 +172,7 @@ my %snv_data;
 my $pm = new Parallel::ForkManager(48);
 $pm->run_on_finish(
     sub {
-        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data_structure_reference) = @_;
+        my $data_structure_reference = pop(@_);
         my $vcf = $data_structure_reference->{input};
         my $name = $data_structure_reference->{id};
         $name //= basename($vcf);
@@ -191,9 +193,6 @@ for my $input_file (@vcfs) {
      );
 }
 $pm->wait_all_children;
-
-#dd \%snv_data;
-#__exit__(__LINE__,'');
 
 print_results(\%snv_data, $delimiter);
 
@@ -221,8 +220,8 @@ sub __filter_raw_data {
     my $alt_mol_cov_threshold = 1;
     my $vaf_threshold = 0.1;
     
-    my ($pos, $ref, $alt, $vaf, $lod, $amp_cov, $ref_cov, $alt_cov, $varid, 
-        $gene, $tscript, $cds, $aa, $location, $function) = split(' ', $data_string);
+    my ($pos, $ref, $alt, $vaf, $lod, $amp_cov, $ref_cov, $alt_cov, $varid, $gene,
+        $tscript, $cds, $aa, $location, $function) = split(' ', $data_string);
     
     # First check VAF and coveraage
     if (($vaf > $lod ) and ($alt_cov > $alt_mol_cov_threshold)) {
@@ -254,8 +253,8 @@ sub proc_vcf {
         # XXX
         #next unless /^chr11:534288/;
         #
-        # TODO: Need to figure out how to only indicate calls that are the positive call when
-        # multiple alleles per entry.
+        # TODO: Need to figure out how to only indicate calls that are the 
+        # positive call when multiple alleles per entry.
 
         my $filtered_data = __filter_raw_data($_);
         if ($filtered_data) {
@@ -268,14 +267,17 @@ sub proc_vcf {
 
 sub print_results {
     my ($data, $delimiter) = @_;
-    my ($ref_width, $alt_width, $varid_width, $cds_width, $aa_width) = get_col_widths($data, [1,2,8,11,12]);
-    my @header = qw( Chr:Position Ref Alt VAF LOD AmpCov MolRefCov MolAltCov VarID 
-        Gene Transcript CDS AA Location Function oncomineGeneClass oncomineVariantClass);
+    my ($ref_width, $alt_width, $varid_width, $cds_width, 
+        $aa_width) = get_col_widths($data, [1,2,8,11,12]);
+    my @header = qw( Chr:Position Ref Alt VAF LOD AmpCov MolRefCov MolAltCov
+        VarID Gene Transcript CDS AA Location Function oncomineGeneClass 
+        oncomineVariantClass
+    );
        
     my %formatter = (
         'Chr:Position'         => '%-17s',
-        'Ref'                  => "%-${ref_width}s", # have to get longest here.
-        'Alt'                  => "%-${alt_width}s", # have to get longest here.
+        'Ref'                  => "%-${ref_width}s", 
+        'Alt'                  => "%-${alt_width}s", 
         'VAF'                  => '%-9s',
         'LOD'                  => '%-7s',
         'AmpCov'               => '%-8s',
@@ -284,8 +286,8 @@ sub print_results {
         'VarID'                => "%-${varid_width}s",
         'Gene'                 => '%-10s',
         'Transcript'           => '%-15s',
-        'CDS'                  => "%-${cds_width}s", # have to get longest here.
-        'AA'                   => "%-${aa_width}s", # have to get longest here.
+        'CDS'                  => "%-${cds_width}s",
+        'AA'                   => "%-${aa_width}s",
         'Location'             => '%-12s',
         'Function'             => '%-9s',
         'oncomineGeneClass'    => '%-21s',
@@ -300,7 +302,9 @@ sub print_results {
         raw_output($data, \@header);
     } else {
         for my $sample (keys %$data) {
-            ($delimiter) ? print join($delimiter, @header),"\n" : printf $string_format, @header;
+            ($delimiter) 
+                ? print join($delimiter, @header),"\n" 
+                : printf $string_format, @header;
             if ( ! %{$data->{$sample}} ) {
                 print ">>>>  No Reportable SNVs or Indels Found in Sample  <<<<\n"; 
             } else {
@@ -332,8 +336,8 @@ sub raw_output {
 }
 
 sub get_col_widths {
-    # Load in a hash of data and an array of indices for which we want field width info, and
-    # output an array of field widths to use in the format string.
+    # Load in a hash of data and an array of indices for which we want field 
+    # width info, and output an array of field widths to use in the format string.
     my ($data,$indices) = @_;
     my @return_widths;
 
@@ -363,7 +367,8 @@ sub get_longest {
 sub __exit__ {
     my ($line, $msg) = @_;
     print "\n\n";
-    print colored("Got exit message at line: $line with message: $msg", 'bold white on_green');
+    print colored("Got exit message at line: $line with message: $msg", 
+        'bold white on_green');
     print "\n";
     exit;
 }

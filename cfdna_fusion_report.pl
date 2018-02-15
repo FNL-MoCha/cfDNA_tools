@@ -18,7 +18,8 @@ my $version = "v0.4.121817";
 # Remove when in prod.
 print "\n";
 print colored("*" x 75, 'bold yellow on_black'), "\n";
-print colored("      DEVELOPMENT VERSION OF $scriptname (version: $version)\n", 'bold yellow on_black');
+print colored("      DEVELOPMENT VERSION OF $scriptname (version: $version)\n", 
+    'bold yellow on_black');
 print colored("*" x 75, 'bold yellow on_black');
 print "\n\n";
 
@@ -182,11 +183,14 @@ sub field_width {
     
 sub proc_vcf {
     my $vcf = shift;
-    # Version 1,2, and 3 drivers. Not all exist in the current version, but keep all for backward compatibility.
-    my @drivers = qw(ABL1 AKT2 AKT3 ALK AR AXL BRAF BRCA1 BRCA2 CDKN2A EGFR ERBB2 ERBB4 ERG ESR1 ETV1 ETV1a 
-                     ETV1b ETV4 ETV4a ETV5 ETV5a ETV5d FGFR1 FGFR2 FGFR3 FGR FLT3 JAK2 KRAS MDM4 MET MYB MYBL1 
-                     NF1 NOTCH1 NOTCH4 NRG1 NTRK1 NTRK2 NTRK3 NUTM1 PDGFRA PDGFRB PIK3CA PPARG PRKACA PRKACB 
-                     PTEN RAD51B RAF1 RB1 RELA RET ROS1 RSPO2 RSPO3 TERT
+    # Version 1,2, and 3 drivers. Not all exist in the current version, but keep 
+    # all for backward compatibility.
+    my @drivers = qw(ABL1 AKT2 AKT3 ALK AR AXL BRAF BRCA1 BRCA2 CDKN2A EGFR ERBB2 
+                     ERBB4 ERG ESR1 ETV1 ETV1a ETV1b ETV4 ETV4a ETV5 ETV5a ETV5d 
+                     FGFR1 FGFR2 FGFR3 FGR FLT3 JAK2 KRAS MDM4 MET MYB MYBL1 NF1 
+                     NOTCH1 NOTCH4 NRG1 NTRK1 NTRK2 NTRK3 NUTM1 PDGFRA PDGFRB 
+                     PIK3CA PPARG PRKACA PRKACB PTEN RAD51B RAF1 RB1 RELA RET 
+                     ROS1 RSPO2 RSPO3 TERT
     );
     my %results;
     (my $sample_name = $$vcf) =~ s/(:?_Fusion_filtered)?\.vcf$//i;
@@ -212,7 +216,8 @@ sub proc_vcf {
             next if ($count == 0 or $data[6] eq 'FAIL') and ! $ref_calls;
             next if ($count < $threshold) and ! $ref_calls;
 
-            # Get rid of FAIL and NOCALL calls to be more compatible with MATCHBox output.
+            # Get rid of FAIL and NOCALL calls to be more compatible with 
+            # MATCHBox output.
             next if $data[6] eq 'NOCALL' and ! $nocall;
 
             my ($pair, $junct, $id) = map{s/_\d//; $_} split(/\./, $data[2]);

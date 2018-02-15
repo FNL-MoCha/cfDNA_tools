@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # Get CNV data from cfDNA panel VCF file
-#################################################################################################
+################################################################################
 use warnings;
 use strict;
 use autodie;
@@ -16,12 +16,13 @@ use Term::ANSIColor;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v0.4.112117";
+my $version = "v0.5.021518";
 
 # Remove when in prod.
 print "\n";
 print colored("*" x 75, 'bold yellow on_black'), "\n";
-print colored("      DEVELOPMENT VERSION OF $scriptname (version: $version)\n", 'bold yellow on_black');
+print colored("      DEVELOPMENT VERSION OF $scriptname (version: $version)\n", 
+    'bold yellow on_black');
 print colored("*" x 75, 'bold yellow on_black');
 print "\n\n";
 
@@ -57,10 +58,10 @@ USAGE: $scriptname [options] <VCF_file(s)>
 
     Output Options
     -o, --output      Send output to custom file.  Default is STDOUT.
-    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or pretty 
-                      print (as 'pp') (DEFAULT: $format).
-    -r, --raw         Output as a raw CSV format that can be input into Excel. The 
-                      header output is not in columns as a part of the whole.
+    -f, --format      Format to use for output.  Can choose 'csv', 'tsv', or 
+                      pretty print (as 'pp') (DEFAULT: $format).
+    -r, --raw         Output as a raw CSV format that can be input into Excel.
+                      The header output is not in columns as a part of the whole.
     -v, --version     Print version information
     -h, --help        Print this help information
 EOT
@@ -100,7 +101,7 @@ my @genelist = split(/,/, $geneid) if $geneid;
 
 # Do not allow both fold diff and copy number values to be used as filters. 
 if (($copy_amp and $copy_loss) && ($fold_amp and $fold_loss)) {
-    print "ERROR: You can not use both the fold difference and copy number threshold ",
+    print "ERROR: You can not use both the fold difference and copy number ", 
         "for filtering. Please use just one or\nthe other.\n";
     exit 1;
 }
@@ -164,7 +165,7 @@ my $pm = new Parallel::ForkManager(48);
 
 $pm->run_on_finish(
     sub {
-        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data_structure_reference) = @_;
+        my $data_structure_reference = pop(@_);
         my $vcf = $data_structure_reference->{input};
         my $name = $data_structure_reference->{id};
         $name //= basename($vcf);
@@ -186,13 +187,7 @@ for my $input_file (@vcfs) {
 }
 $pm->wait_all_children;
 
-#dd \%cnv_data;
-#__exit__(__LINE__,'Post read VCF file.');
-
 my $results = proc_cnv_data(\%cnv_data, \%filters);
-#dd $results;
-#__exit__(__LINE__,'Post result processing.');
-
 print_results($results, $delimiter);
 
 sub proc_cnv_data {
@@ -239,7 +234,6 @@ sub print_results {
     my ($data, $delimiter) = @_;
     my @header = qw( Chr Gene Start End Length Tiles CN FD p-val Med_Mol_Cov 
         Med_Read_Cov );
-    #my $pp_format = "%-8s %-8s %-11s %-11s %-11s %-8s %-8s %-8s %-8s %-8s %-8s %-18s\n";
 
     my %formatter = (
         'Chr'          => '%-8s',
@@ -264,13 +258,18 @@ sub print_results {
     } else {
         for my $sample (keys %$data) {
             my ($id, $gender, $mapd, $cellularity) = split( /:/, $sample );
-            print "::: CNV Data For $id (Gender: $gender, Cellularity: $cellularity, MAPD: $mapd) :::\n";
-            ($delimiter) ? print join($delimiter, @header),"\n" : printf $string_format, @header;
+            print "::: CNV Data For $id (Gender: $gender, Cellularity: ",
+                "$cellularity, MAPD: $mapd) :::\n";
+            ($delimiter) 
+                ? print join($delimiter, @header),"\n" 
+                : printf $string_format, @header;
             if ( ! @{$$data{$sample}} ) {
                 print ">>>>  No Reportable CNVs Found in Sample  <<<<\n"; 
             } else {
                 for my $cnv (@{$$data{$sample}}) {
-                    ($delimiter) ? print join($delimiter, @$cnv), "\n" : printf $string_format, @$cnv;
+                    ($delimiter) 
+                        ? print join($delimiter, @$cnv), "\n" 
+                        : printf $string_format, @$cnv;
                 }
             }
             print "\n";
@@ -305,7 +304,9 @@ sub filter_results {
     return if (@{$filters{gene}}) and ! grep {$$data{gene} eq $_} @{$filters{gene}};
 
     # We made it the whole way through; check for copy number thresholds
-    (copy_number_filter($data, \@cn_thresholds)) ? return return_data($data) : return;
+    (copy_number_filter($data, \@cn_thresholds)) 
+        ? return return_data($data) 
+        : return;
 }
 
 sub return_data {
@@ -352,7 +353,8 @@ sub proc_vcf {
             if ( $_ =~ /sampleGender=(\w+)/ ) {
                 $gender = $1 and next;
             }
-            # Need to add to accomodate the new CNV plugin; may not have the same field as the normal IR data.
+            # Need to add to accomodate the new CNV plugin; may not have the 
+            # same field as the normal IR data.
             if ($_ =~ /AssumedGender=([mf])/) {
                 ($1 eq 'm') ? ($gender='Male') : ($gender='Female');
                 next;
@@ -373,7 +375,6 @@ sub proc_vcf {
         $sample_id = join( ':', $sample_name, $gender, $mapd, $cellularity );
 
         # Get rid of NOCALLs, unless we specifically want them.
-        # TODO: somehow NOCALLs still escaping through.  Did I forget to set a default val?
         if ($nocall && $data[6] eq 'NOCALL') {
             ${$cnv_data{$sample_id}->{'NONE'}} = '';
             next;
@@ -405,7 +406,8 @@ sub proc_vcf {
 sub __exit__ {
     my ($line, $msg) = @_;
     print "\n\n";
-    print colored("Got exit message at line: $line with message: $msg", 'bold white on_green');
+    print colored("Got exit message at line: $line with message: $msg", 
+        'bold white on_green');
     print "\n";
     exit;
 }

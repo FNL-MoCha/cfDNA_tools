@@ -1,9 +1,10 @@
 #!/usr/bin/perl
-# Oncoming PanCancer cfDNA pipeline has header formatting problems (and some others too!) that are preventing 
-# adequate parsing of the VCF files.  Fix the header to avoid the VCF Tools parsing warnings.
+# Oncoming PanCancer cfDNA pipeline has header formatting problems (and some 
+# others too!) that are preventing adequate parsing of the VCF files.  Fix the 
+# header to avoid the VCF Tools parsing warnings.
 #
 # 10/4/2017 - D Sims
-############################################################################################################
+################################################################################
 use strict;
 use warnings;
 use autodie;
@@ -61,14 +62,14 @@ my $vcf = shift;
 # Set up the output file handle.
 my $new_vcf;
 ($outfile) ? ($new_vcf = $outfile) : (($new_vcf = $vcf) =~ s/\.vcf/_fixed.vcf/);
-open( my $out_fh, ">", $new_vcf) || die "Can't open the output file '$new_vcf' for writing: $!";
+open( my $out_fh, ">", $new_vcf); 
 
-#########------------------------------ END ARG Parsing ---------------------------------#########
+#########--------------------- END ARG Parsing ------------------------#########
 sub read_vcf {
     my ($vcf, $out_fh) = @_;
     my (@header, @vars);
-    my @bad_fields = qw(MOL_RATIO_TO_WILD_TYPE NORM_COUNT_WITHIN_GENE RATIO_TO_WILD_TYPE 
-        NORM_MOL_COUNT_WITHIN_GENE);
+    my @bad_fields = qw(MOL_RATIO_TO_WILD_TYPE NORM_COUNT_WITHIN_GENE 
+        RATIO_TO_WILD_TYPE NORM_MOL_COUNT_WITHIN_GENE);
 
     open(my $fh, "<", $vcf);
     while (my $line = <$fh>) {
@@ -105,7 +106,3 @@ sub write_vcf {
 
 print "Reading VCF file and extracting header and bad lines...";
 read_vcf($vcf, $out_fh);
-
-#fix_line(<DATA>);
-__DATA__
-##INFO=<ID=RATIO_TO_WILD_TYPE,Number=1,Type=Float,String,Description="Ratio between read count of this assay and oormalized count of wild type assay ">
