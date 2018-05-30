@@ -148,7 +148,7 @@ else {
     my ($ver, $subver, $date) = split(/[\._]/, $vcfextractor_ver);
     my $cur_ver = version->parse("$ver.$subver");
 
-    if ($cur_ver >= $required_ver) {
+    if ($cur_ver <= $required_ver) {
         print "ERROR: vcfExtractor.pl version (v$cur_ver) is too old and does not ",
             "have the necessary components to run cfDNA data analysis.\nPlease ",
             "update your version to the latest from: ",
@@ -262,6 +262,7 @@ sub proc_vcf {
             $results{$varid} = $filtered_data;
         }
     }
+    exit;
     return \%results, \$sample_id;
 }
 
